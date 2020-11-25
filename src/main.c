@@ -30,9 +30,8 @@ float random_number();
 float * alocar(int dimensaoA,int dimensaoB);
 float * gerarMatriz(char * path,int dimensaoA,int dimensaoB);
 float * lerArquivo(char * path,int dimensaoA,int dimensaoB);
-float * calculaMatrizAB(float * matrizA,float * matrizB);
-float * calculaMatrizDABC();
-double reducaoMatrizD();
+void calculaMatrizDABC();
+void reducaoMatrizD();
 
 
 
@@ -45,7 +44,8 @@ double reducaoMatrizD();
  *
 **/
 int 
-    y,w,v; //variavel que guardará os valores da coluna
+    y,w,v, //variavel que guardará os valores da coluna
+	i,j,k; // variaveis de controle
 
 //aloca e le os arquivos do vetor
 float 
@@ -55,7 +55,9 @@ float
 	* matrizD,
 	* matrizAB;
 
-
+double
+	reducao; //salvara o resultado da redução
+	
 /***
  *
  *
@@ -76,7 +78,7 @@ float * zeraMatriz(float * matriz, int dimensaoA, int dimensaoB){
 		i,
 		MAX = dimensaoA * dimensaoB;
 	
-	//#pragma omp parallel for shared(matriz,MAX) private(i)	
+	//#pragma acc parallel loop gang	
 	for(i = 0;i<MAX;i++){
 		matriz[i] = 0.0;
 	}	
@@ -157,11 +159,8 @@ float * lerArquivo(char * path,int dimensaoA,int dimensaoB){
 * - Calcula a matriz D = (A x B) x C
 *
 */
-float * calculaMatrizDABC(){
-
-	int
-		i,j,k;
-		  
+void calculaMatrizDABC(){
+  
 	#pragma acc parallel loop gang collapse(2)
 	for(i=0;i<y;i++){	       							
 		for(j=0;j<v;j++){
@@ -179,27 +178,21 @@ float * calculaMatrizDABC(){
 			  matrizD[i] += matrizAB[posicao(i,j,v)] * matrizC[j];							
 	    }	
 	}
-
- 
+	
 	return matrizD;
  
 }
 
 
-double reducaoMatrizD(){
-  
-	int
-		i;
-  
-	double
-    	reducao = 0;
+void reducaoMatrizD(){
+
+   	reducao = 0;
     
-	#pragma acc parallel loop reduction(+:reducao)
+	#pragma acc parallel loop gang reduction(+:reducao)
 	for(i=0;i<y;i++){             
 		reducao += matrizD[i];
 	}
  
-	return reducao;
  
 }
 
@@ -220,17 +213,9 @@ int main(int argc,char ** argv){
 		printf("argumentos invalidos!\n");
 		return 1;
 	}	
- 
-  
-  	int
-    	i;
     
 	clock_t 
 		tIni,tFim;  	
-  
-  	double
-		reducao;	//salvara o resultado da redução
-		
 		
 	// atribui os valores de dimensão da matriz
    	y = atoi(argv[1]);
@@ -254,29 +239,25 @@ int main(int argc,char ** argv){
 	if(matrizA == NULL || matrizB == NULL || matrizC == NULL){	
 		printf("Matriz(es) não carregada(s)!\n");	
 		return 1;
-	} 
- 
+	}  
 
  	// gera e zera a "vetor" D
-	matrizD = zeraMatriz(alocar(y,1),y,1);
-
-   	
+	matrizD = zeraMatriz(alocar(y,1),y,1); 	
    	  
 	   
-	#pragma acc enter data copyin(matrizA[0:y*w],matrizB[0:w*v],matrizC[0:v],matrizD[0:y],matrizAB[0:y*v],y,w,v) create(reducao) 
+	#pragma acc enter data copyin(matrizA[0:y*w],matrizB[0:w*v],matrizC[0:v],matrizD[0:y],matrizAB[0:y*v],y,w,v) create(reducao,i,j,k) 
 	
 	//grava o tempo incial 
 	tIni = clock(); 
 	
-	matrizD = calculaMatrizDABC();
-	reducao = reducaoMatrizD();	 
+	calculaMatrizDABC();
+	reducaoMatrizD();	 
 	 
 	//grava o tempo final
 	tFim = clock();
 	
-	#pragma acc exit data copyout(reducao) delete(matrizA,matrizB,matrizC,matrizD,matrizAB,y,w,v)
+	#pragma acc exit data copyout(reducao) delete(matrizA,matrizB,matrizC,matrizAB,y,w,v,i,j,k) copyout(reducao,matrizD)
 		
-	
 	
   	// printa a redução e o tempo
 	printf("o resultado da reducao foi: %f - o tempo exercido foi de %f segundos\n",reducao,(double) (tFim - tIni)/CLOCKS_PER_SEC);
