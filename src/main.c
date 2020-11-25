@@ -178,9 +178,7 @@ void calculaMatrizDABC(){
 			  matrizD[i] += matrizAB[posicao(i,j,v)] * matrizC[j];							
 	    }	
 	}
-	
-	return matrizD;
- 
+	 
 }
 
 
