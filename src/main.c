@@ -162,17 +162,19 @@ float * calculaMatrizDABC(){
 	int
 		i,j,k;
 		  
-	#pragma acc parallel loop collapse(3)
+	#pragma acc parallel loop gang collapse(2)
 	for(i=0;i<y;i++){	       							
-		for(j=0;j<v;j++){	         						
+		for(j=0;j<v;j++){
+			#pragma acc loop vector	         						
 			for(k=0;k<w;k++){	
 				matrizAB[posicao(i,j,v)] += (matrizA[posicao(i,k,w)] * matrizB[posicao(k,j,v)]) ;										
 			}
 		}					
 	}
 
-	#pragma omp parallel for collapse(2)
+	#pragma acc parallel loop gang
 	for(i=0;i<y;i++){	 
+		#pragma acc loop vector
 	    for(j=0;j<v;j++){	      
 			  matrizD[i] += matrizAB[posicao(i,j,v)] * matrizC[j];							
 	    }	
