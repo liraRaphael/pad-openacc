@@ -72,24 +72,10 @@ float random_number(){
 }
 
 
-// inicializa uma matriz com o valor 0.0
-float * zeraMatriz(float * matriz, int dimensaoA, int dimensaoB){
-	int 
-		i,
-		MAX = dimensaoA * dimensaoB;
-	
-	//#pragma acc parallel loop gang	
-	for(i = 0;i<MAX;i++){
-		matriz[i] = 0.0;
-	}	
-	
-	return matriz;
-}
-
 // aloca dinamicamente como proposto pelo professor
 float * alocar(int dimensaoA,int dimensaoB){
 	float * ponteiro;
-	ponteiro = malloc(sizeof(float) * dimensaoA * dimensaoB);	
+	ponteiro = (float *) calloc(dimensaoA * dimensaoB,sizeof(float));	
 	return ponteiro;
 }
 
@@ -161,19 +147,17 @@ float * lerArquivo(char * path,int dimensaoA,int dimensaoB){
 */
 void calculaMatrizDABC(){
   
-	#pragma acc parallel loop gang collapse(2)
+	#pragma acc parallel loop gang collapse(3)
 	for(i=0;i<y;i++){	       							
-		for(j=0;j<v;j++){
-			#pragma acc loop vector	         						
+		for(j=0;j<v;j++){      						
 			for(k=0;k<w;k++){	
 				matrizAB[posicao(i,j,v)] += (matrizA[posicao(i,k,w)] * matrizB[posicao(k,j,v)]) ;										
 			}
 		}					
 	}
 
-	#pragma acc parallel loop gang
+	#pragma acc parallel loop gang collapse(2)
 	for(i=0;i<y;i++){	 
-		#pragma acc loop vector
 	    for(j=0;j<v;j++){	      
 			  matrizD[i] += matrizAB[posicao(i,j,v)] * matrizC[j];							
 	    }	
@@ -226,7 +210,7 @@ int main(int argc,char ** argv){
 	matrizC = lerArquivo(argv[6],v,1); 
 	
 	// gera uma matriz AB limpa
-	matrizAB = zeraMatriz(alocar(y,v),y,v);
+	matrizAB = alocar(y,v);
 		
 	if(y == 0 || w == 0 || v == 0){
 		printf("Valor(es) y,w e/ou v invalido(s)!\n");
@@ -240,23 +224,23 @@ int main(int argc,char ** argv){
 	}  
 
  	// gera e zera a "vetor" D
-	matrizD = zeraMatriz(alocar(y,1),y,1); 	
-   	  
+	matrizD = alocar(y,1); 	
+ 
+   //grava o tempo incial 
+	tIni = clock(); 
 	   
 	#pragma acc enter data copyin(matrizA[0:y*w],matrizB[0:w*v],matrizC[0:v],matrizD[0:y],matrizAB[0:y*v],y,w,v) create(reducao,i,j,k) 
 	
-	//grava o tempo incial 
-	tIni = clock(); 
+	
 	
 	calculaMatrizDABC();
 	reducaoMatrizD();	 
 	 
+	
+	#pragma acc exit data delete(matrizA,matrizB,matrizC,matrizAB,y,w,v,i,j,k) copyout(reducao,matrizD)
+		
 	//grava o tempo final
 	tFim = clock();
-	
-	#pragma acc exit data copyout(reducao) delete(matrizA,matrizB,matrizC,matrizAB,y,w,v,i,j,k) copyout(reducao,matrizD)
-		
-	
   	// printa a redução e o tempo
 	printf("o resultado da reducao foi: %f - o tempo exercido foi de %f segundos\n",reducao,(double) (tFim - tIni)/CLOCKS_PER_SEC);
 	
